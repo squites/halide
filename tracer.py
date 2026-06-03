@@ -1,13 +1,10 @@
-from typing import Optional, Union
+from typing import Optional
 from dataclasses import dataclass, field
 import graphviz
-#@dataclass
-#class Tensor:
-#    node: "Node"
-#
-#    def __matmul__(self, other):
-#        return Tensor(Node(op="MATMUL", inputs=[self.node, other.node]))
 
+#from matcher import Rule, Rewriter
+
+# Graph IR. Tensor-op level
 @dataclass
 class Node:
     op: str# = "data"
@@ -21,32 +18,27 @@ class Node:
         K2, N = other.shape
         if K1 != K2:
             raise RuntimeError(f"Inner dimension mismatch: {self.shape} x {other.shape}")
-        return Node(op="MATMUL", inputs=[self,other], shape=(M, N), name="c")
+
+        if self.dtype != other.dtype:
+            raise RuntimeError(f"Data type mismatch: {self.dtype}, {other.dtype}")
+        return Node(op="MATMUL", inputs=[self,other], shape=(M, N), dtype=self.dtype, name=f'MAT({self.name}{other.name})')
 
     def relu(self):
-        return Node(op="RELU", inputs=[self], shape=self.shape, name="d")
+        return Node(op="RELU", inputs=[self], shape=self.shape, dtype=self.dtype, name=f'RELU_{self.name}')
 
 
 def walk(node, topo, visited=None):
     """ walk the graph """
-    print("* node:", node.name)
-    print("visited (BEFORE): ", visited)
-    
     if visited is None:
         visited = set()
-    
+
     if node.name in visited:
         return node
     visited.add(node.name)
-    print("visited (AFTER): ", visited)
-   
-    #if node.inputs:
-    for i in node.inputs:
-        print(f"input node {node.name}: ", i)
-        walk(i, topo, visited)
-    topo.append(node.name)
-    #print("TOPO: ", topo)
 
+    for i in node.inputs:
+        walk(i, topo, visited)
+    topo.append(node)
     return node
 
 def viz_graph(root, dot=None, visited=None):
@@ -56,9 +48,6 @@ def viz_graph(root, dot=None, visited=None):
     
     if visited is None:
         visited = set()
-
-    #if root in visited:
-    #    return dot
     visited.add(root.name)
 
     label = f'{root.name}'
@@ -78,31 +67,10 @@ def viz_graph(root, dot=None, visited=None):
 def check_matmul(a, b, c, M, N, K):
     for i in range(M):
         for j in range(N):
+            tmp = 0
             for k in range(K):
-                c[i][j] += a[i][k] * b[k][j]
-
-a = Node(op="INPUT", shape=(3,2), dtype="float32", name="A")
-b = Node(op="INPUT", shape=(2,3), dtype="float32", name="B")
-c = (a @ b)
-d = c.relu() # separate here to visualize better
-
-print("\nMatmul:")
-print(c)
-
-print("\nRelu:")
-print(d, "\n")
-
-print("Walking:")
-topo = [] # this is a list of topological sorted nodes
-walk(d, topo)
-print("TOPO: ", topo)
-
-#graph = viz_graph(d)
-#graph.save("graph.dot")
-#graph.render("graph.dot", view=True)
-
-# TODO: add separate pass that walks on the full graph in topo order, and fills in the shapes. 
-
+                tmp += a[i][k] * b[k][j]
+            c[i][j] = tmp
 
 """
 take a small neural network (even just a matmul + relu), trace it into a graph IR, 
@@ -114,4 +82,22 @@ generate actual GPU code, and run it. That one project forces you through every 
 - the fusion decision problem, 
 - memory hierarchy, 
 - code generation
+
+
+
+there are 4 levels of IR:
+1) Graph IR (Tensor-op level):
+    Reason about the operations and dataflow.
+    - op fusion, constant folding, dead code elim, algebraic simplification,...
+
+2) Loop IR (loop-nest lvl):
+    ops are expanded into explicit loops over memory. reason about loops, iteration order, mem. access...
+    - loop tiling, interchange, unrolling, buffer/mem planning, ...
+
+3) renderer (kernel-lang lvl):
+    basically walk Loop IR, and generate cuda:
+    - thread/block mapping, smem staging, mem-access coalescing, ..
+
+4) ISA (PTX/llvm IR):
+    - reg. allocation, instruction scheduling, peephole optimization, ...
 """
