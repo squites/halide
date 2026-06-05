@@ -17,22 +17,27 @@ class Rule:
 class Rewriter:
     def __init__(self, rules, graph):
         self.rules = rules
-        self.graph = graph # remove later
 
-    def rewrite(self, topo):
+    def rewrite(self, topo, root):
         # apply each rule to each node of subgraph
+        newroot = root
         for node in topo:
             for rule in self.rules:
-                print(f'\nMatching rule:{rule.name}, node:{node}')
-                fused = rule.match(node, topo)
-                if fused is not None:
-                    newnode = rule.builder(fused)
-                    print("\nOLD: ", node)
-                    print("\nNEW: ", newnode)
-                    for old in topo: # self
-                        for i, input in enumerate(old.inputs):
+                print("\nNODE: ", node.name)
+                x = rule.match(node, topo)
+                if x is not None:
+                    fused = rule.builder(x, node.name)
+                    # We fuse the node but we need to rewire the inputs. Basically, if the default
+                    # node that we fuse is input for any other node in the graph, then we need to 
+                    # rewire, so instead of the default node, the input will be the new fused one 
+                    for other in topo:
+                        for i, input in enumerate(other.inputs):
                             if input is node:
-                                old.inputs[i] = newnode
+                                #print("EQUAL!")
+                                other.inputs[i] = fused
+            if node == newroot and fused is not None:
+                newroot = fused
+        return newroot
 
 def pat_fused_matmul_relu(subgraph): # subgraph is also a node (ex: Node RELU is a subgraph)
     print("\nPATTERN\nnode: ", subgraph)
@@ -45,16 +50,11 @@ def pat_fused_matmul_relu(subgraph): # subgraph is also a node (ex: Node RELU is
         return binds
     return None
 
- 
-def build_fused_matmul_relu(binds):
+def build_fused_matmul_relu(binds, name):
     print(f'\nBINDS:\n{binds["inputs"]}\n{binds["shape"]}\n{binds["dtype"]}')
-    name = f'{binds["inputs"][0].name}{binds["inputs"][1].name}' 
     node = Node(op="F_MATMUL_RELU", inputs=binds["inputs"], shape=binds["shape"], dtype=binds["dtype"], name=f"FUSED_MATMUL_RELU({name})")
     print("\nBUILD\n", node)
     return node
-
-# BUG: matmul of fused nodes as input are not working, because the matmul node still kept the old
-# input nodes "RELU" instead of the new ones "FUSED"
 
 """
 Tinygrad PatternMatcher:

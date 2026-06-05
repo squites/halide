@@ -13,7 +13,7 @@ if __name__ == "__main__":
     f = d.relu()
 
     g = (e @ f)
-    out = g.relu() # e
+    out = g.relu()
 
     print("Walking:")
     topo = [] # this is a list of topological sorted nodes
@@ -25,22 +25,13 @@ if __name__ == "__main__":
     rFusion1 = Rule("fused_matmul_relu", pat_fused_matmul_relu, build_fused_matmul_relu)
     rules = [rFusion1]
     rewriter = Rewriter(rules, graph=out)
-    #out = rewriter.rewrite(topo) # topo is the graph in topological order
-    rewriter.rewrite(topo)
+    y = rewriter.rewrite(topo, out)
 
-    topo = []
-    print("RERUNNING TOPO:\n")
-    walk(out, topo)
-    for i in topo:
+    newtopo = []
+    print("\nRERUNNING TOPO:")
+    walk(y, newtopo)
+    for i in newtopo:
         print("*", i.name)
-
-    #rewriter.rewrite(topo)
-    #topo = []
-    #print("RERUNNING TOPO 2:\n")
-    #walk(out, topo)
-    #for i in topo:
-    #    print("*", i.name)
-
 
     
 #test_walk(topo)
