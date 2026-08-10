@@ -41,6 +41,14 @@ class Mul(Expr):
         return f'Mul({self.op0}, {self.op1})'
 
 @dataclass
+class Max(Expr):
+    op0: Expr
+    op1: Expr
+
+    def __repr__(self) -> str:
+        return f'Max({self.op0}, {self.op1})'
+
+@dataclass
 class ConstInt(Expr): # substitute IntImm for this one. more intuitive
     value: int
 
@@ -88,6 +96,7 @@ class RDom:
 class CallType(Enum):
     INPUT = auto()
     FUNC = auto()
+    EXTERN = auto()
 
 class DType(Enum):
     int32 = auto()
