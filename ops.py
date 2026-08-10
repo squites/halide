@@ -1,4 +1,4 @@
-from ir import Call, Variable, Add, Mul, ConstInt, Func, Var, RDom, CallType
+from ir import Call, Variable, Input, Add, Mul, ConstInt, Func, Var, RDom, CallType
 #from tensor import Tensor
 
 def op_add(op0, op1): # a,b are Tensors
@@ -36,6 +36,28 @@ def op_sum(op0):
     #f = Func(name=f'sum', args=[], value=ConstInt(0), updates=updates) # 'value' here is the initial value
     #return Tensor(func=f, shape=())
     return (f, ())
+
+def op_matmul(M, N):
+    # M -> Tensor(Input("name=in0", shape=(3,2), dtype=int32))
+    # N -> Tensor(Input("name=in1", shape=(2,3), dtype=int32))
+    # c[i][j] = 0
+    # for k in range(0, k):
+    #   c[i][j] = c[i][j] + a[i][k] * b[k][j]
+    i = Var("i")
+    j = Var("j")
+    k = RDom(name="k", min=0, extent=M.shape[1]) # k loops over the inner dim "M.shape[1]"
+    call0 = CallType.INPUT if isinstance(M.func, Input) else CallType.FUNC # use this instead of hardcode 
+    call1 = CallType.INPUT if isinstance(N.func, Input) else CallType.FUNC
+    m0 = Call(name=M.func.name, args=[Variable("i"), Variable("k")], ref=M.func, call_type=call0) # read M at index [i][k]
+    n0 = Call(name=N.func.name, args=[Variable("k"), Variable("j")], ref=N.func, call_type=call1) # read N at index [k][j]
+    
+    # matmul is a reduction, so Mul happens inside the fold. 
+    # C[i][j] = 0
+    f = Func(name=f'matmul_{M.func.name}_{N.func.name}', args=[i, j], value=ConstInt(0), updates=[])    
+    self_call = Call(name=f'matmul_{M.func.name}_{N.func.name}', args=[Variable("i"), Variable("j")], ref=f, call_type=CallType.FUNC) # acc
+    update = ([Variable("i"), Variable("j")], Add(self_call, Mul(m0, n0)), k)
+    f.updates.append(update)
+    return (f, (M.shape[0], N.shape[1]))
 
 # ref is a pointer to the Func or Input being called. ex:
 # a=Tensor(Input("in0", 1, int32), (4,))

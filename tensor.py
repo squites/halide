@@ -1,6 +1,6 @@
 from typing import Union
 from ir import Func, Input
-from ops import op_add, op_mul, op_sum
+from ops import op_add, op_mul, op_sum, op_matmul
 
 # wrapper
 class Tensor:
@@ -21,6 +21,9 @@ class Tensor:
 
     def __mul__(self, other):
         return Tensor(*op_mul(self, other))
+
+    def __matmul__(self, other):
+        return Tensor(*op_matmul(self, other))
     
     def sum(self):
         return Tensor(*op_sum(self))
