@@ -38,7 +38,7 @@ class Mul(Expr):
     op1: Expr
 
     def __repr__(self) -> str:
-        return f'Add({self.op0}, {self.op1})'
+        return f'Mul({self.op0}, {self.op1})'
 
 @dataclass
 class ConstInt(Expr): # substitute IntImm for this one. more intuitive
