@@ -90,8 +90,8 @@ def op_maxreduce(t0, axis=0): # axis tells which dim it wants to reduce. (2,4) a
     x = Call(name=t0.func.name, args=args, ref=t0.func, call_type=call)
     # init func
     f = Func(name=f'maxreduce_{t0.func.name}', args=vars, value=ConstFloat(float("-inf")), updates=[])
-    self_call = Call(name=f'maxreduce_{t0.func.name}', args=args, ref=f, call_type=CallType.FUNC)
-    update = (args, Max(self_call, x), reduce)
+    self_call = Call(name=f'maxreduce_{t0.func.name}', args=args2, ref=f, call_type=CallType.FUNC)
+    update = (args2, Max(self_call, x), reduce)
     f.updates.append(update)
     shape = tuple(t0.shape[n] for n in kept)
     return (f, shape)
