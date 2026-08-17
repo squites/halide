@@ -14,3 +14,21 @@ t1 = Tensor.input((2,3), name="N")
 t2 = t0 @ t1
 print("Matmul:")
 print(t2)
+
+t3 = t2.relu()
+print("Relu:")
+print(t3)
+
+t4 = t3.maxreduce()
+print("Maxreduce:")
+print(t4)
+
+print("\nMaxreduce:")
+t5 = Tensor.input((2,4), name="t5")
+out = t5.maxreduce(axis=1)
+print(out)
+
+print("\nSoftmax:")
+t6 = Tensor.input((3, 4), name="t6")
+t6 = t6.softmax()
+print(t6)

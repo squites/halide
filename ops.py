@@ -1,14 +1,44 @@
-from ir import Call, Variable, Input, Add, Mul, Max, ConstInt, ConstFloat, Func, Var, RDom, CallType
+from ir import Call, Variable, Input, Add, Sub, Mul, Max, ConstInt, ConstFloat, Func, Var, RDom, CallType
 #from tensor import Tensor
 
 def op_add(op0, op1): # a,b are Tensors
-    # verify that a.shape and b.shape are equal? if (a.shape != b.shape) broadcast? error? ignore?
-    i = Var("i") # the coordinate. The variable that output depends on. Output shape is (4,) -> 1 dim -> 1 Var -> i = Var("i")
-    a = Call(name=op0.func.name, args=[Variable("i")], ref=op0.func, call_type=CallType.INPUT)
-    b = Call(name=op1.func.name, args=[Variable("i")], ref=op1.func, call_type=CallType.INPUT)
+    # implicit apply broadcast if needed
+    # check len(shapes) to see if there's different shapes for broadcasting:
+    vars = [Var(f'i{n}') for n in range(len(op0.shape))]
+    args = [Variable(n.name) for n in vars]
+    a = Call(name=op0.func.name, args=args, ref=op0.func, call_type=CallType.INPUT)
+    b = Call(name=op1.func.name, args=args, ref=op1.func, call_type=CallType.INPUT)
     operation = Add(a, b)
-    func = Func(name=f'add_{op0.func.name}_{op1.func.name}', args=[i], value=operation, updates=[])
+    func = Func(name=f'add_{op0.func.name}_{op1.func.name}', args=vars, value=operation, updates=[])
     #return Tensor(func, op0.shape) # this shouldnt return Tensor because it'll have a circular depency with tensor.py
+    return (func, op0.shape)
+
+def op_sub(op0, op1): # op0(3,4), op1(3,)
+    # need to identify if there's need to bcast and do it implicitly
+    # TODO: broadcast (B,C) - (B,)
+    outshape = max(len(op0.shape), len(op1.shape))
+    vars = [Var(f'i{n}') for n in range(outshape)]
+    args = [Variable(n.name) for n in vars]
+    #call0 = CallType.INPUT if isinstance(op0.func, Input) else CallType.FUNC
+    #call1 = CallType.INPUT if isinstance(op1.func, Input) else CallType.FUNC
+    call0 = callto(op0)
+    call1 = callto(op1)
+    if op0.shape == op1.shape:
+        bargs = args
+    elif len(op1.shape) < len(op0.shape):
+        # op1=1D, op0=2D
+        if op1.shape == op0.shape[:len(op1.shape)]:
+            bargs = args[:len(op1.shape)]   # only first N vars
+        else:
+            raise ValueError(f"unsupported shapes {op0.shape} {op1.shape}")
+    #op1.shape == (op0.shape[1],) or op1.shape == (1,): # need to encapsulate in a tuple
+        # broadcast
+        #bargs = [args[len(args)-1]]
+    else:
+        raise ValueError(f"unsupported shapes {op0.shape} {op1.shape}")
+    a = Call(name=op0.func.name, args=args, ref=op0.func, call_type=call0)
+    b = Call(name=op1.func.name, args=bargs, ref=op1.func, call_type=call1)
+    func = Func(name=f'sub_{op0.func.name}_{op1.func.name}', args=vars, value=Sub(a, b), updates=[])
     return (func, op0.shape)
 
 def op_mul(op0, op1):
@@ -20,9 +50,20 @@ def op_mul(op0, op1):
     #return Tensor(func, op0.shape)
     return (func, op0.shape)
 
-def op_sum(op0):
+def op_div(op0, op1):
+    vars = [Var(f'i{n}') for n in range(len(op0.shape))]
+    args = [Variable(n.name) for n in vars]
+    call = CallType.INPUT if isinstance(op0.func, Input) else CallType.FUNC
+    a = Call(name=op0.func.name, args=args, ref=op0.func, call_type=call)
+    b = Call(name=op1.func.name, args=args, ref=op1.func, call_type=call)
+    op = Div() # actually I can implement with Mul() instead of div
+    func = Func(name=f'div_{op0.func.name}_{op1.func.name}', args=vars, value=op, updates=[])
+    return (func, op0.shape)
+
+def op_sum(op0, axis=0):
+    # TODO: implement sum over axis.
     # op0 = Tensor(Func("add", [Var("i")], Add(Call("in0", [Variable("i")], ref=Input("in0", 1, int32), call_type=INPUT), Call("in1", [Variable("i")], ref=Input("in1", 1, int32), call_type=INPUT))), shape=(4,))))
-    reduce = RDom(name="rloop", min=0, extent=op0.shape[0]) # Im saying that I created a Reduction Loop variable named "rloop" that'll range from 0 to 4 (excluding 4) in the case of shape=(4,)
+    reduce = RDom(name="rloop", min=0, extent=op0.shape[axis]) # Im saying that I created a Reduction Loop variable named "rloop" that'll range from 0 to 4 (excluding 4) in the case of shape=(4,)
     x = Call(name=op0.func.name, args=[Variable("rloop")], ref=op0.func, call_type=CallType.FUNC) # Im saying Call object represents that'll read one element from the function "op0.func.name" at the coordinate "rloop". 
     # the Func needs to exist before acc so acc.ref points to it
     f = Func(name=f'sum', args=[], value=ConstInt(0), updates=[])
@@ -75,6 +116,29 @@ def op_exp(t0):
     f = Func(name=f'exp_{t0.func.name}', args=vars, value=ext, updates=[])
     return (f, t0.shape)
 
+# verify this sum() version
+def op_sum(t0, axis=0):
+    kept = [n for n in range(len(t0.shape)) if n != axis]
+    vars = [Var(f'i{n}') for n in range(len(kept))]
+    args = [Variable(v.name) for v in vars]
+    args2 = args.copy()
+    reduce = RDom(name="r", min=0, extent=t0.shape[axis]) # Im saying that I created a Reduction Loop variable named "rloop" that'll range from 0 to 4 (excluding 4) in the case of shape=(4,)
+    args.insert(axis, Variable("r"))
+    call = callto(t0)
+    x = Call(name=t0.func.name, args=args, ref=t0.func, call_type=call) # Im saying Call object represents that'll read one element from the function "op0.func.name" at the coordinate "rloop". 
+    # the Func needs to exist before acc so acc.ref points to it
+    f = Func(name=f'sum_{t0.func.name}', args=vars, value=ConstInt(0), updates=[])
+    # here this is reading whatever sum produces, which is the accumulator scalar
+    acc = Call(name=f'sum', args=args2, ref=f, call_type=CallType.FUNC) # this Call() is a call to the sum function recursive
+    # reduction will operate over `acc += add[rloop]` for example
+    body = Add(acc, x) # accumulator + x
+    # ([], Add(acc,x), RDom("rloop", [0..3])). "lhs" is empty because is a scalar value
+    update = (args2, body, reduce)
+    f.updates.append(update)
+    shape = tuple(t0.shape[n] for n in kept)
+    #return Tensor(func=f, shape=())
+    return (f, shape)
+
 def op_maxreduce(t0, axis=0): # axis tells which dim it wants to reduce. (2,4) axis=1, then reduce dim with 4, so softmax on each row independently
     # axis=0 max_reduce each row of a col
     # axis=1 max_reduce each col of a row
@@ -82,9 +146,9 @@ def op_maxreduce(t0, axis=0): # axis tells which dim it wants to reduce. (2,4) a
     vars = [Var(f'i{n}') for n in range(len(kept))]        # [Var("i0"), Var("i1")]
     args = [Variable(v.name) for v in vars]                # [Variable("i0"), Variable("i1")]
     args2 = args.copy()                                    # [Variable("i0"), Variable("i1")]
-    args.insert(axis, Variable("r"))                       # [Variable("i0"), Variable("i1"), Variable("r")] # if axis=0, then variables[r, i1]
     # loop header
     reduce = RDom(name="r", min=0, extent=t0.shape[axis])
+    args.insert(axis, Variable("r"))                       # [Variable("i0"), Variable("i1"), Variable("r")] # if axis=0, then variables[r, i1]
     call = CallType.INPUT if isinstance(t0.func, Input) else CallType.FUNC
     # axis=1 need row coordinate
     x = Call(name=t0.func.name, args=args, ref=t0.func, call_type=call)
@@ -95,12 +159,84 @@ def op_maxreduce(t0, axis=0): # axis tells which dim it wants to reduce. (2,4) a
     f.updates.append(update)
     shape = tuple(t0.shape[n] for n in kept)
     return (f, shape)
-    #
-    # 1 2 3                                                              3
-    # 2 2 5 -> returns a vector where each pos is the max of row/col ->  5
-    # 7 1 0             (this is reducing on axis=1)                     7
-    #
-    # axis=1 means we're reducing the 2nd dim, so in a tensor (2,4), we're reducing on 4, which is each column
-    # of a row.
+
+    # [1, 2, 3]     [3] 
+    # [4, 5, 6] ->  [6] -> max of each row. axis=1, because checks over cols of each row to find the max
+    # [9, 8, 1]     [9]
+
+    # t0.shape(2,4)
+    # len(t0.shape) = 2
+    # AXIS=1                                                AXIS=0
+    # kept=[0] if axis=1;                                   kept=[1] if axis=0; So removes the index of the axis
+    # vars=[Var("i0")] if axis=1;                           vars=[Var("i1")] if axis=0
+    # args=[Variable("i0")] if axis=1;                      args=[Variable("i1")] if axis=0
+    # insert=[Variable("i0"), Variable("r")] if axis=1      insert=[Variable("r"), Variable("i1")] if axis=0
+    # Call("input", [Variable("i0"), Variable("r")]...)     Call("input", [Variable("r"), Variable("i1")]...)
+    # Func("x", [Var("i0")], -inf,...)                      Func("x", [Var("i1")], -inf)
+    # Call("x", [Variable("i0")], ...)                      Call("x", [Variable("i1")], ...)
+    # ([Variable("i0")], Max(), RDom())                     ([Variable("i1")], Max(), RDom)
 
 
+def op_softmax(t0):
+    from tensor import Tensor
+    # mx = max(t0)
+    # x = exp(t0 - mx) -> bcast
+    # return x / sum(x)
+    # Essentially:
+    # exp(t0 - max(t0)) / sum(exp(t0 - max(t0))) 
+
+    max = Tensor(*op_maxreduce(t0, axis=len(t0.shape)-1)) # Tensor(Func(...), shape)
+    #max = op_maxreduce(t0, axis=len(t0.shape)-1)
+    print("mx:", max)
+    sub = Tensor(*op_sub(t0, max))
+    print("sub:", sub)
+    exp = Tensor(*op_exp(sub))
+    print("exp:", exp)
+    sum = Tensor(*op_sum(exp)) # not working yet, i need to do sum over axis
+    print("sum:", sum)
+    
+    div = op_div(exp, sum)
+    return (t0.func, t0.shape)
+    #sub = Tensor(op_sub(t0, mx)) # Tensor(Input(...)) - Tensor(Func(...)) # needs to bcast inside sub
+    #x = Tensor(op_exp(sub))
+    #sum = Tensor(op_sum(x))
+    #f = op_div(x, sum)
+    #return (mx, t0.shape)
+    #return (f, t0.shape)
+
+def callto(x):
+    if isinstance(x.func, Input):
+        return CallType.INPUT
+    else:
+        return CallType.FUNC
+
+
+"""
+a: [[1, 2, 3],
+    [4, 5, 6],
+    [7, 8, 9]]            shape (3, 3)
+
+b: [10, 20, 30]           shape (3,)
+
+align from the right
+a: (3, 3)
+b: (   3)   ← only one dimension, so it aligns with the RIGHT 3
+
+So b is treated as if it has shape (1, 3) — one row, three columns. That single row is reused for all 3 rows of a:
+
+a:          b (conceptually):      result:
+[1, 2, 3]   [10, 20, 30]          [1+10, 2+20, 3+30]  = [11, 22, 33]
+[4, 5, 6] + [10, 20, 30]        = [4+10, 5+20, 6+30]  = [14, 25, 36]
+[7, 8, 9]   [10, 20, 30]          [7+10, 8+20, 9+30]  = [17, 28, 39]
+
+
+Example 2 (softmax):
+a: [10, 20, 30, 40]     shape (4,)
+b: 5                    shape () — just one number
+
+result = a - b
+       = [10-5, 20-5, 30-5, 40-5]
+       = [5, 15, 25, 35]
+The scalar 5 is reused for every element
+
+"""
