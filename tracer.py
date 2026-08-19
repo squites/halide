@@ -5,7 +5,7 @@ from tensor import Tensor
 a = Tensor.input((4,), name="in0") # Tensor(Input("in0", 1, int32), (4,))
 b = Tensor.input((4,), name="in1") # Tensor(Input("in1", 1, int32), (4,))
 c = (a + b)                        # Tensor(Func("add0", [Var("i")], Add(Call("in0", [Variable("i")], ref=Input("in0", 1, int32), call_type=INPUT), Call("in1", [Variable("i")], ref=Input("in1", 1, int32), call_type=INPUT))), shape=(4,))
-out = c.sum() # implement sum()
+out = c.sum(axis=0) # implement sum()
 print("Sum:")
 print(out)
 
@@ -30,5 +30,6 @@ print(out)
 
 print("\nSoftmax:")
 t6 = Tensor.input((3, 4), name="t6")
-t6 = t6.softmax()
-print(t6)
+print("t6: ", t6)
+t7 = t6.softmax()
+print("softmax t7: ", t7)

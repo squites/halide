@@ -4,15 +4,14 @@ def op_add(op0, op1): # a,b are Tensors
     # implicit apply broadcast if needed
     vars = [Var(f'i{n}') for n in range(len(op0.shape))]
     args = [Variable(n.name) for n in vars]
-    a = Call(name=op0.func.name, args=args, ref=op0.func, call_type=CallType.INPUT)
-    b = Call(name=op1.func.name, args=args, ref=op1.func, call_type=CallType.INPUT)
+    a = Call(name=op0.func.name, args=args, ref=op0.func, call_type=callto(op0.func))
+    b = Call(name=op1.func.name, args=args, ref=op1.func, call_type=callto(op1.func))
     operation = Add(a, b)
     func = Func(name=f'add_{op0.func.name}_{op1.func.name}', args=vars, value=operation, updates=[])
     return (func, op0.shape)
 
-def op_sub(op0, op1): # op0(3,4), op1(3,)
+def op_sub(op0, op1):
     # need to identify if there's need to bcast and do it implicitly
-    # TODO: broadcast (B,C) - (B,)
     outshape = max(len(op0.shape), len(op1.shape))
     vars = [Var(f'i{n}') for n in range(outshape)]
     args = [Variable(n.name) for n in vars]
@@ -34,11 +33,11 @@ def op_sub(op0, op1): # op0(3,4), op1(3,)
     return (func, op0.shape)
 
 def op_mul(op0, op1):
-    i = Var("i")                                                                               # 1-declare the coordinate
-    a = Call(name=op0.func.name, args=[Variable("i")], ref=op0.func, call_type=CallType.INPUT) # 2-read 'a' at index 'i'
-    b = Call(name=op1.func.name, args=[Variable("i")], ref=op1.func, call_type=CallType.INPUT) # 3-read 'b' at index 'i'
-    operation = Mul(a, b)                                                                      # 4-scalar math 
-    func = Func(name=f'mul_{op0.func.name}{op1.func.name}', args=[i], value=operation, updates=[]) # 5-wrap back to Tensor 
+    i = Var("i")                                                                                 
+    a = Call(name=op0.func.name, args=[Variable("i")], ref=op0.func, call_type=callto(op0.func))
+    b = Call(name=op1.func.name, args=[Variable("i")], ref=op1.func, call_type=callto(op1.func))
+    operation = Mul(a, b)                                                                        
+    func = Func(name=f'mul_{op0.func.name}{op1.func.name}', args=[i], value=operation, updates=[])
     return (func, op0.shape)
 
 def op_div(op0, op1):
@@ -72,7 +71,7 @@ def op_matmul(M, N):
 def op_relu(t0):
     vars = [Var(f'i{n}') for n in range(len(t0.shape))]
     variables = [Variable(n.name) for n in vars]
-    call = CallType.INPUT if isinstance(t0.func, Input) else CallType.FUNC
+    call = callto(t0.func)
     x = Call(name=t0.func.name, args=variables, ref=t0.func, call_type=call)
     f = Func(name=f'relu_{t0.func.name}', args=vars, value=Max(ConstInt(0), x), updates=[])
     return (f, t0.shape)

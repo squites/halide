@@ -32,6 +32,15 @@ class Add(Expr):
     def __repr__(self) -> str:
         return f'Add({self.op0}, {self.op1})'
 
+# also this one could be represented with add of negative number instead of sub. remove later
+@dataclass
+class Sub(Expr):
+    op0: Expr
+    op1: Expr
+    
+    def __repr__(self) -> str:
+        return f'Sub({self.op0}, {self.op1})'
+
 @dataclass
 class Mul(Expr):
     op0: Expr
@@ -39,6 +48,14 @@ class Mul(Expr):
 
     def __repr__(self) -> str:
         return f'Mul({self.op0}, {self.op1})'
+
+@dataclass
+class Div(Expr):
+    op0: Expr
+    op1: Expr
+
+    def __repr__(self) -> str:
+        return f'Div({self.op0}, {self.op1})'
 
 @dataclass
 class Max(Expr):
@@ -54,6 +71,13 @@ class ConstInt(Expr): # substitute IntImm for this one. more intuitive
 
     def __repr__(self) -> str:
         return f'ConstInt({self.value})'
+
+@dataclass
+class ConstFloat(Expr):
+    value: float
+
+    def __repr__(self) -> str:
+        return f'ConstFloat({self.value})'
 
 # hierarchy 2 - Structure
 class Func: # represent a tensor or computation stage. has name, dims, 
