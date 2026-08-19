@@ -118,37 +118,48 @@ def op_exp(t0):
 
 # verify this sum() version
 def op_sum(t0, axis=0):
-    kept = [n for n in range(len(t0.shape)) if n != axis]
-    vars = [Var(f'i{n}') for n in range(len(kept))]
+    # example: Tensor(Func(...), shape=(3,3))
+    # for i0 in range(t0.shape[0]):
+    #   out[i0] = -inf
+    #   for r in range(t0.shape[1]):
+    #       out[i0] = Sum(out[i0], t0[i0, r])
+    # kept(outdims): is the output shape (the dims that will remain the same after reduce) which is exactly the shape of the out tensor. Because its reducing, the axis dim will be reduced to a scalar, dropping that dim completely 
+    outdims = [n for n in range(len(t0.shape)) if n != axis]
+    vars = [Var(f'i{n}') for n in range(len(outdims))]
     args = [Variable(v.name) for v in vars]
-    args2 = args.copy()
-    reduce = RDom(name="r", min=0, extent=t0.shape[axis]) # Im saying that I created a Reduction Loop variable named "rloop" that'll range from 0 to 4 (excluding 4) in the case of shape=(4,)
-    args.insert(axis, Variable("r"))
-    call = callto(t0)
-    x = Call(name=t0.func.name, args=args, ref=t0.func, call_type=call) # Im saying Call object represents that'll read one element from the function "op0.func.name" at the coordinate "rloop". 
-    # the Func needs to exist before acc so acc.ref points to it
+    args2 = args.copy() # to get [Variable(..)] list without RDom var.
+    # reduce is the RDom variable that'll sweep from 0..t0[axis]. if axis=1 from 0 to rowsize
+    reduce = RDom(name="r", min=0, extent=t0.shape[axis])
+    args.insert(axis, Variable(reduce.name))
+    call = callto(t0.func)
+    # x is the element being folded in this iteration. So is the current value being compared with the acc (acc could be max, could be sum)
+    # Call is to tell the compiler where to read this element (t6[i0, r]). So read from "t6" at coordinates [i0,r]
+    x = Call(name=t0.func.name, args=args, ref=t0.func, call_type=call)
+    # The output tensor must exist before anything writing/reading at this tensor.
+    # here we declare the tensor, with args which are the vars/coordinates of the output tensor which were determined by `kept/outshape` 
+    # value is the initial value of the tensor before the updates
+    # updates is temporarily empty
     f = Func(name=f'sum_{t0.func.name}', args=vars, value=ConstInt(0), updates=[])
-    # here this is reading whatever sum produces, which is the accumulator scalar
-    acc = Call(name=f'sum', args=args2, ref=f, call_type=CallType.FUNC) # this Call() is a call to the sum function recursive
-    # reduction will operate over `acc += add[rloop]` for example
-    body = Add(acc, x) # accumulator + x
-    # ([], Add(acc,x), RDom("rloop", [0..3])). "lhs" is empty because is a scalar value
-    update = (args2, body, reduce)
-    f.updates.append(update)
-    shape = tuple(t0.shape[n] for n in kept)
-    #return Tensor(func=f, shape=())
+    self_f = Call(name=f.name, args=)
+
     return (f, shape)
 
 def op_maxreduce(t0, axis=0): # axis tells which dim it wants to reduce. (2,4) axis=1, then reduce dim with 4, so softmax on each row independently
     # axis=0 max_reduce each row of a col
     # axis=1 max_reduce each col of a row
-    kept = [n for n in range(len(t0.shape)) if n != axis]  # [0, 1, ...] # this n!=axis 
+    # maxreduce works like this:
+    # for i0 in range(t0.shape[0]):
+    #   out[i0] = -inf  
+    #   for r in range(t0.shape[1]):
+    #       out[i0] = Max(out[i0], t0[i0, r])
+
+    kept = [n for n in range(len(t0.shape)) if n != axis]  # [0, 1, ...] # this n!=axis
     vars = [Var(f'i{n}') for n in range(len(kept))]        # [Var("i0"), Var("i1")]
     args = [Variable(v.name) for v in vars]                # [Variable("i0"), Variable("i1")]
     args2 = args.copy()                                    # [Variable("i0"), Variable("i1")]
     # loop header
     reduce = RDom(name="r", min=0, extent=t0.shape[axis])
-    args.insert(axis, Variable("r"))                       # [Variable("i0"), Variable("i1"), Variable("r")] # if axis=0, then variables[r, i1]
+    args.insert(axis, Variable("r"))
     call = CallType.INPUT if isinstance(t0.func, Input) else CallType.FUNC
     # axis=1 need row coordinate
     x = Call(name=t0.func.name, args=args, ref=t0.func, call_type=call)
