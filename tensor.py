@@ -25,7 +25,6 @@ class Tensor:
     def __mul__(self, other):
         return Tensor(*op_mul(self, other))
 
-    # maybe dont need here, same for op_sub
     def __div__(self, other):
         return Tensor(*op_div(self, other))
 
@@ -33,7 +32,6 @@ class Tensor:
         return Tensor(*op_matmul(self, other))
     
     def sum(self, axis=0):
-        #return Tensor(*op_sum(self))
         return Tensor(*op_sum(self, axis))
 
     def relu(self):

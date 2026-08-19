@@ -2,7 +2,6 @@ from enum import Enum, auto
 from typing import Union, Optional
 from dataclasses import dataclass
 
-# Hierarchy 1 - Expressions
 class Expr:
     """ base class """
     pass 
@@ -12,7 +11,7 @@ class Call(Expr): # Call is "read one element of that thing (name), at these coo
     name: str        # thing
     args: list[Expr] # coordinates
     ref: Union["Func","Input"] # ptr to the thing
-    call_type: "CallType" #str # tag saying what kind of thing the "name" refers to.
+    call_type: "CallType" # tag saying what kind of thing the "name" refers to.
 
     def __repr__(self) -> str:
         return f'Call({self.name}, {self.args}, {self.call_type})'
@@ -32,7 +31,6 @@ class Add(Expr):
     def __repr__(self) -> str:
         return f'Add({self.op0}, {self.op1})'
 
-# also this one could be represented with add of negative number instead of sub. remove later
 @dataclass
 class Sub(Expr):
     op0: Expr
@@ -66,7 +64,7 @@ class Max(Expr):
         return f'Max({self.op0}, {self.op1})'
 
 @dataclass
-class ConstInt(Expr): # substitute IntImm for this one. more intuitive
+class ConstInt(Expr): # substitute for IntImm
     value: int
 
     def __repr__(self) -> str:
@@ -79,8 +77,7 @@ class ConstFloat(Expr):
     def __repr__(self) -> str:
         return f'ConstFloat({self.value})'
 
-# hierarchy 2 - Structure
-class Func: # represent a tensor or computation stage. has name, dims, 
+class Func:
     def __init__(self, name: str, args: list["Var"], value: Expr, updates: Optional[list[tuple]]):
         self.name = name
         self.args = args # indices that the computation will operate (i,j)
@@ -100,7 +97,7 @@ class Input: # external input, previously ImageParam from halide's
     def __repr__(self) -> str:
         return f'Input({self.name}, {self.dims}, {self.type})'
 
-class Var: # just a name
+class Var:
     def __init__(self, name):
         self.name = name
     
@@ -108,7 +105,7 @@ class Var: # just a name
         return f'Var({self.name})'
 
 class RDom:
-    def __init__(self, name: str, min: Expr, extent: Expr): # I dont like extent. maybe change to 'range' or 'max'
+    def __init__(self, name: str, min: Expr, extent: Expr): # change to 'range' or 'max'
         self.name = name
         self.min = min
         self.extent = extent
