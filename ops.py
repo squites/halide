@@ -1,5 +1,6 @@
 from ir import Call, Variable, Input, Add, Sub, Mul, Div, Max, ConstInt, ConstFloat, Func, Var, RDom, CallType
 
+# TODO: change op func names. Its getting huge. Maybe get a counter so add0, add1. 
 def op_add(op0, op1): # a,b are Tensors
     # implicit apply broadcast if needed
     vars = [Var(f'i{n}') for n in range(len(op0.shape))]
@@ -7,7 +8,9 @@ def op_add(op0, op1): # a,b are Tensors
     a = Call(name=op0.func.name, args=args, ref=op0.func, call_type=callto(op0.func))
     b = Call(name=op1.func.name, args=args, ref=op1.func, call_type=callto(op1.func))
     operation = Add(a, b)
-    func = Func(name=f'add_{op0.func.name}_{op1.func.name}', args=vars, value=operation, updates=[])
+    name = countname("add")
+    #func = Func(name=f'add_{op0.func.name}_{op1.func.name}', args=vars, value=operation, updates=[])
+    func = Func(name=name, args=vars, value=operation, updates=[])
     return (func, op0.shape)
 
 def op_sub(op0, op1):
@@ -29,30 +32,43 @@ def op_sub(op0, op1):
         raise ValueError(f"unsupported shapes {op0.shape} {op1.shape}")
     a = Call(name=op0.func.name, args=args, ref=op0.func, call_type=call0)
     b = Call(name=op1.func.name, args=bargs, ref=op1.func, call_type=call1)
-    func = Func(name=f'sub_{op0.func.name}_{op1.func.name}', args=vars, value=Sub(a, b), updates=[])
+    #func = Func(name=f'sub_{op0.func.name}_{op1.func.name}', args=vars, value=Sub(a, b), updates=[])
+    name = countname("sub")
+    func = Func(name=name, args=vars, value=Sub(a, b), updates=[])
     return (func, op0.shape)
 
 def op_mul(op0, op1):
     i = Var("i")                                                                                 
     a = Call(name=op0.func.name, args=[Variable("i")], ref=op0.func, call_type=callto(op0.func))
     b = Call(name=op1.func.name, args=[Variable("i")], ref=op1.func, call_type=callto(op1.func))
-    operation = Mul(a, b)                                                                        
-    func = Func(name=f'mul_{op0.func.name}{op1.func.name}', args=[i], value=operation, updates=[])
+    operation = Mul(a, b) 
+    #func = Func(name=f'mul_{op0.func.name}{op1.func.name}', args=[i], value=operation, updates=[])
+    name = countname("mul")
+    func = Func(name=name, args=[i], value=operation, updates=[])
     return (func, op0.shape)
 
 def op_div(op0, op1):
+    # TODO: broadcast!
     vars = [Var(f'i{n}') for n in range(len(op0.shape))]
     args = [Variable(n.name) for n in vars]
     #call = CallType.INPUT if isinstance(op0.func, Input) else CallType.FUNC
+    if op0.shape == op1.shape:
+        bargs = args
+    elif len(op1.shape) < len(op0.shape):
+        if op1.shape == op0.shape[:len(op1.shape)]:
+            bargs = args[:len(op1.shape)]
+        else:
+            raise ValueError(f'unsuported shapes {op0.shape} {op1.shape}')
+    else:
+        raise ValueError(f'unsuported shapes {op0.shape} {op1.shape}')
     a = Call(name=op0.func.name, args=args, ref=op0.func, call_type=callto(op0.func))
-    b = Call(name=op1.func.name, args=args, ref=op1.func, call_type=callto(op1.func))
-    op = Div(a, b) # actually I can implement with Mul() instead of div
-    func = Func(name=f'div_{op0.func.name}_{op1.func.name}', args=vars, value=op, updates=[])
+    b = Call(name=op1.func.name, args=bargs, ref=op1.func, call_type=callto(op1.func))
+    #func = Func(name=f'div_{op0.func.name}_{op1.func.name}', args=vars, value=Div(a, b), updates=[])
+    name = countname("div")
+    func = Func(name=name, args=vars, value=Div(a, b), updates=[])
     return (func, op0.shape)
 
-def op_matmul(M, N):
-    # M -> Tensor(Input("name=in0", shape=(3,2), dtype=int32))
-    # N -> Tensor(Input("name=in1", shape=(2,3), dtype=int32))
+def op_matmul(M, N): # Tensor(Input("name=in0", shape=(3,2), dtype=int32))
     i = Var("i")
     j = Var("j")
     k = RDom(name="k", min=0, extent=M.shape[1]) # k loops over the inner dim "M.shape[1]"
@@ -62,8 +78,11 @@ def op_matmul(M, N):
     n0 = Call(name=N.func.name, args=[Variable("k"), Variable("j")], ref=N.func, call_type=call1) # read N at index [k][j]
     # matmul is a reduction, so Mul happens inside the fold. 
     # C[i][j] = 0
-    f = Func(name=f'matmul_{M.func.name}_{N.func.name}', args=[i, j], value=ConstInt(0), updates=[])    
-    self_call = Call(name=f'matmul_{M.func.name}_{N.func.name}', args=[Variable("i"), Variable("j")], ref=f, call_type=CallType.FUNC) # acc
+    #f = Func(name=f'matmul_{M.func.name}_{N.func.name}', args=[i, j], value=ConstInt(0), updates=[])    
+    #self_call = Call(name=f'matmul_{M.func.name}_{N.func.name}', args=[Variable("i"), Variable("j")], ref=f, call_type=CallType.FUNC) # acc
+    name = countname("matmul")
+    f = Func(name=name, args=[i, j], value=ConstInt(0), updates=[])    
+    self_call = Call(name=f.name, args=[Variable("i"), Variable("j")], ref=f, call_type=CallType.FUNC) # acc
     update = ([Variable("i"), Variable("j")], Add(self_call, Mul(m0, n0)), k)
     f.updates.append(update)
     return (f, (M.shape[0], N.shape[1]))
@@ -73,7 +92,9 @@ def op_relu(t0):
     variables = [Variable(n.name) for n in vars]
     call = callto(t0.func)
     x = Call(name=t0.func.name, args=variables, ref=t0.func, call_type=call)
-    f = Func(name=f'relu_{t0.func.name}', args=vars, value=Max(ConstInt(0), x), updates=[])
+    #f = Func(name=f'relu_{t0.func.name}', args=vars, value=Max(ConstInt(0), x), updates=[])
+    name = countname("relu")
+    f = Func(name=name, args=vars, value=Max(ConstInt(0), x), updates=[])
     return (f, t0.shape)
 
 def op_exp(t0):
@@ -82,7 +103,9 @@ def op_exp(t0):
     call = CallType.INPUT if isinstance(t0.func, Input) else CallType.FUNC
     x = Call(name=t0.func.name, args=variables, ref=t0.func, call_type=call)
     ext = Call(name="expf", args=[x], ref=None, call_type=CallType.EXTERN)
-    f = Func(name=f'exp_{t0.func.name}', args=vars, value=ext, updates=[])
+    #f = Func(name=f'exp_{t0.func.name}', args=vars, value=ext, updates=[])
+    name = countname("exp")
+    f = Func(name=name, args=vars, value=ext, updates=[])
     return (f, t0.shape)
 
 def op_sum(t0, axis=0):
@@ -105,8 +128,10 @@ def op_sum(t0, axis=0):
     # here we declare the tensor, with args which are the vars/coordinates of the output tensor which were determined by `kept/outshape` 
     # value is the initial value of the tensor before the updates
     # updates is temporarily empty
-    f = Func(name=f'sum_{t0.func.name}', args=vars, value=ConstInt(0), updates=[])
-    acc = Call(name=f.name, args=args, ref=f, call_type=CallType.FUNC)
+    #f = Func(name=f'sum_{t0.func.name}', args=vars, value=ConstInt(0), updates=[])
+    name = countname("sum")
+    f = Func(name=name, args=vars, value=ConstInt(0), updates=[])
+    acc = Call(name=f.name, args=args[:-1], ref=f, call_type=CallType.FUNC)
     rule = (args[:-1], Add(acc, x), reduce) # args[:-1] to remove reduce variable
     f.updates.append(rule)
     shape = tuple(t0.shape[n] for n in outdims)
@@ -131,7 +156,9 @@ def op_maxreduce(t0, axis=0): # axis tells which dim it wants to reduce. (2,4) a
     # axis=1 need row coordinate
     x = Call(name=t0.func.name, args=args, ref=t0.func, call_type=call)
     # init func
-    f = Func(name=f'maxreduce_{t0.func.name}', args=vars, value=ConstFloat(float("-inf")), updates=[])
+    #f = Func(name=f'maxreduce_{t0.func.name}', args=vars, value=ConstFloat(float("-inf")), updates=[])
+    name = countname("maxreduce")
+    f = Func(name=name, args=vars, value=ConstFloat(float("-inf")), updates=[])
     self_call = Call(name=f'maxreduce_{t0.func.name}', args=args2, ref=f, call_type=CallType.FUNC)
     update = (args2, Max(self_call, x), reduce)
     f.updates.append(update)
@@ -175,6 +202,12 @@ def op_softmax(t0):
 
 def callto(x):
     return CallType.INPUT if isinstance(x, Input) else CallType.FUNC
+
+_count = 0
+def countname(x):
+    global _count
+    _count += 1
+    return f'{x}{_count}'
 
 """
 a: [[1, 2, 3],
