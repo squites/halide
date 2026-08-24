@@ -1,5 +1,7 @@
 from ir import Call, Variable, Input, Add, Sub, Mul, Div, Max, ConstInt, ConstFloat, Func, Var, RDom, CallType
 
+MAP = {}
+
 # TODO: change op func names. Its getting huge. Maybe get a counter so add0, add1. 
 def op_add(op0, op1): # a,b are Tensors
     # implicit apply broadcast if needed
@@ -11,6 +13,7 @@ def op_add(op0, op1): # a,b are Tensors
     name = countname("add")
     #func = Func(name=f'add_{op0.func.name}_{op1.func.name}', args=vars, value=operation, updates=[])
     func = Func(name=name, args=vars, value=operation, updates=[])
+    MAP[func.name] = func
     return (func, op0.shape)
 
 def op_sub(op0, op1):
@@ -35,6 +38,7 @@ def op_sub(op0, op1):
     #func = Func(name=f'sub_{op0.func.name}_{op1.func.name}', args=vars, value=Sub(a, b), updates=[])
     name = countname("sub")
     func = Func(name=name, args=vars, value=Sub(a, b), updates=[])
+    MAP[func.name] = func
     return (func, op0.shape)
 
 def op_mul(op0, op1):
@@ -45,6 +49,7 @@ def op_mul(op0, op1):
     #func = Func(name=f'mul_{op0.func.name}{op1.func.name}', args=[i], value=operation, updates=[])
     name = countname("mul")
     func = Func(name=name, args=[i], value=operation, updates=[])
+    MAP[func.name] = func
     return (func, op0.shape)
 
 def op_div(op0, op1):
@@ -66,6 +71,7 @@ def op_div(op0, op1):
     #func = Func(name=f'div_{op0.func.name}_{op1.func.name}', args=vars, value=Div(a, b), updates=[])
     name = countname("div")
     func = Func(name=name, args=vars, value=Div(a, b), updates=[])
+    MAP[func.name] = func
     return (func, op0.shape)
 
 def op_matmul(M, N): # Tensor(Input("name=in0", shape=(3,2), dtype=int32))
@@ -85,6 +91,7 @@ def op_matmul(M, N): # Tensor(Input("name=in0", shape=(3,2), dtype=int32))
     self_call = Call(name=f.name, args=[Variable("i"), Variable("j")], ref=f, call_type=CallType.FUNC) # acc
     update = ([Variable("i"), Variable("j")], Add(self_call, Mul(m0, n0)), k)
     f.updates.append(update)
+    MAP[f.name] = f
     return (f, (M.shape[0], N.shape[1]))
 
 def op_relu(t0):
@@ -95,6 +102,7 @@ def op_relu(t0):
     #f = Func(name=f'relu_{t0.func.name}', args=vars, value=Max(ConstInt(0), x), updates=[])
     name = countname("relu")
     f = Func(name=name, args=vars, value=Max(ConstInt(0), x), updates=[])
+    MAP[f.name] = f
     return (f, t0.shape)
 
 def op_exp(t0):
@@ -106,6 +114,7 @@ def op_exp(t0):
     #f = Func(name=f'exp_{t0.func.name}', args=vars, value=ext, updates=[])
     name = countname("exp")
     f = Func(name=name, args=vars, value=ext, updates=[])
+    MAP[f.name] = f
     return (f, t0.shape)
 
 def op_sum(t0, axis=0):
@@ -135,6 +144,7 @@ def op_sum(t0, axis=0):
     rule = (args[:-1], Add(acc, x), reduce) # args[:-1] to remove reduce variable
     f.updates.append(rule)
     shape = tuple(t0.shape[n] for n in outdims)
+    MAP[f.name] = f
     return (f, shape)
 
 def op_maxreduce(t0, axis=0): # axis tells which dim it wants to reduce. (2,4) axis=1, then reduce dim with 4, so softmax on each row independently
@@ -159,10 +169,11 @@ def op_maxreduce(t0, axis=0): # axis tells which dim it wants to reduce. (2,4) a
     #f = Func(name=f'maxreduce_{t0.func.name}', args=vars, value=ConstFloat(float("-inf")), updates=[])
     name = countname("maxreduce")
     f = Func(name=name, args=vars, value=ConstFloat(float("-inf")), updates=[])
-    self_call = Call(name=f'maxreduce_{t0.func.name}', args=args2, ref=f, call_type=CallType.FUNC)
+    self_call = Call(name=f.name, args=args2, ref=f, call_type=CallType.FUNC)
     update = (args2, Max(self_call, x), reduce)
     f.updates.append(update)
     shape = tuple(t0.shape[n] for n in kept)
+    MAP[f.name] = f
     """
     return:
     Func(
@@ -189,15 +200,16 @@ def op_softmax(t0):
     from tensor import Tensor
     # exp(t0 - max(t0)) / sum(exp(t0 - max(t0))) 
     max = Tensor(*op_maxreduce(t0, axis=1))
-    print("max:", max)
+    #print("max:", max)
     sub = Tensor(*op_sub(t0, max))
-    print("\nsub:", sub)
+    #print("\nsub:", sub)
     exp = Tensor(*op_exp(sub))
-    print("\nexp:", exp)
+    #print("\nexp:", exp)
     sum = Tensor(*op_sum(exp, axis=1))
-    print("\nsum:", sum)
+    #print("\nsum:", sum)
     div = Tensor(*op_div(exp, sum))
-    print("\ndiv:", div)
+    #print("\ndiv:", div)
+    #MAP[f.name] = f
     return (div.func, div.shape)
 
 def callto(x):
@@ -208,6 +220,18 @@ def countname(x):
     global _count
     _count += 1
     return f'{x}{_count}'
+
+
+def find_direct_calls():
+    pass
+
+# TODO: This is a map 
+def find_transitive_calls(node, map=None) -> dict[str, Func]:
+   pass
+
+            
+
+
 
 """
 a: [[1, 2, 3],
