@@ -1,5 +1,5 @@
 from tensor import Tensor
-from ops import find_transitive_calls, MAP
+from ops import find_direct_calls, MAP
 
 # tracer file will be to load an example or a model from extern places
 # move to examples
@@ -39,12 +39,13 @@ print("\nMatmul + ReLU + Softmax:")
 t0 = Tensor.input((3,2), name="M")
 t1 = Tensor.input((2,3), name="N")
 t2 = (t0 @ t1).relu().softmax()
-#t2 = t2.relu()
-#t2 = t2.softmax()
 print(t2)
+print("\nMAP:")
 for k,v in MAP.items():
-    print(f'{k}: {v}')
+    print(f'** {k}: {v}')
 
-
-
+calls = find_direct_calls(t2.func)
+print("\nCALLS:")
+for c in calls:
+    print("* ", c)
 #find_transitive_calls(t7.func)

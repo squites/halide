@@ -1,4 +1,4 @@
-from ir import Call, Variable, Input, Add, Sub, Mul, Div, Max, ConstInt, ConstFloat, Func, Var, RDom, CallType
+from ir import Expr, Call, Variable, Input, Add, Sub, Mul, Div, Max, ConstInt, ConstFloat, Func, Var, RDom, CallType
 
 MAP = {}
 
@@ -215,23 +215,43 @@ def op_softmax(t0):
 def callto(x):
     return CallType.INPUT if isinstance(x, Input) else CallType.FUNC
 
+# adds counter for naming functions
 _count = 0
 def countname(x):
     global _count
     _count += 1
     return f'{x}{_count}'
 
+# BFS finding all nodes in Expr tree "node"
+def walk(node):
+    out = [node]
+    for child in node.children():
+        out.extend(walk(child))
+    return out
 
-def find_direct_calls():
-    pass
+# returns list of Func objs that the calls refer to
+def find_direct_calls(node):
+    print("NODE:", node)
+    calls = []
+    if isinstance(node, Func):
+        for i in walk(node.value):
+            print("i:", i)
+            if isinstance(i, Call) and i.call_type == CallType.FUNC:
+                calls.append(i.ref)
 
-# TODO: This is a map 
-def find_transitive_calls(node, map=None) -> dict[str, Func]:
+        for lhs, rhs, _ in node.updates:
+            for i in lhs:
+                for l in walk(i):
+                    if isinstance(l, Call) and l.call_type == CallType.FUNC:
+                        calls.append(l.ref)
+            for r in walk(rhs):
+                if isinstance(r, Call) and r.call_type == CallType.FUNC:
+                    calls.append(r.ref)
+    return calls
+
+
+def find_transitive_calls(node):
    pass
-
-            
-
-
 
 """
 a: [[1, 2, 3],
