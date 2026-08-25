@@ -231,11 +231,9 @@ def walk(node):
 
 # returns list of Func objs that the calls refer to
 def find_direct_calls(node):
-    print("NODE:", node)
     calls = []
     if isinstance(node, Func):
         for i in walk(node.value):
-            print("i:", i)
             if isinstance(i, Call) and i.call_type == CallType.FUNC:
                 calls.append(i.ref)
 
@@ -249,9 +247,37 @@ def find_direct_calls(node):
                     calls.append(r.ref)
     return calls
 
-
+# implement warshall's algorithm
 def find_transitive_calls(node):
-   pass
+    # adjacent matrix
+    N = len(MAP.keys())
+    adj_matrix = [[0 for row in MAP.keys()] for col in MAP.keys()]
+    idx = {key: i for i, key in enumerate(MAP)}
+    for k,v in MAP.items(): # "sum0": Func(sum0,...)
+        closure = find_direct_calls(v)
+        print(f"{k}: {closure}")
+        for j,v2 in MAP.items():
+            if v2 in closure:
+                adj_matrix[idx.get(k)][idx.get(j)] = 1
+
+    print("Adjacent Matrix:")
+    for r in range(N):
+        print(adj_matrix[r])
+    
+    # if there's 1 means i->k. So we need to find if k has any edges from k to any j
+    # so if k->j ([k][j]=1), then i->j ([i][j] = 1)
+    for k in range(N):
+        for row in range(N):
+            if adj_matrix[row][k] == 1: # invariant, can be outside loop col
+                for col in range(N):
+                    if adj_matrix[k][col] == 1:
+                        adj_matrix[row][col] = 1
+
+    # we have the first adjacent matrix
+    print("\nResult Matrix with Transitive Calls:")
+    for r in range(N):
+        print(adj_matrix[r])
+
 
 """
 a: [[1, 2, 3],
