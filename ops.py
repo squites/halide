@@ -1,5 +1,6 @@
 from ir import Expr, Call, Variable, Input, Add, Sub, Mul, Div, Max, ConstInt, ConstFloat, Func, Var, RDom, CallType
 
+# given a function name, what is its actual Func definition: ("name": Func(...))
 MAP = {}
 
 # TODO: change op func names. Its getting huge. Maybe get a counter so add0, add1. 
@@ -200,16 +201,10 @@ def op_softmax(t0):
     from tensor import Tensor
     # exp(t0 - max(t0)) / sum(exp(t0 - max(t0))) 
     max = Tensor(*op_maxreduce(t0, axis=1))
-    #print("max:", max)
     sub = Tensor(*op_sub(t0, max))
-    #print("\nsub:", sub)
     exp = Tensor(*op_exp(sub))
-    #print("\nexp:", exp)
     sum = Tensor(*op_sum(exp, axis=1))
-    #print("\nsum:", sum)
     div = Tensor(*op_div(exp, sum))
-    #print("\ndiv:", div)
-    #MAP[f.name] = f
     return (div.func, div.shape)
 
 def callto(x):
@@ -222,13 +217,14 @@ def countname(x):
     _count += 1
     return f'{x}{_count}'
 
-# BFS finding all nodes in Expr tree "node"
+# DFS finding all nodes in Expr tree "node"
 def walk(node):
     out = [node]
     for child in node.children():
         out.extend(walk(child))
     return out
 
+# looking inside the Func node, which other Funcs this node calls to directly?
 # returns list of Func objs that the calls refer to
 def find_direct_calls(node):
     calls = []
@@ -247,23 +243,22 @@ def find_direct_calls(node):
                     calls.append(r.ref)
     return calls
 
-# implement warshall's algorithm
+# implement warshall's algorithm to find every Func reachable from node Func. 
+# This is adding complexity by implementing this way.
+# Should be a simple DFS on output node, but I did this way because was my intuitive graph knowledge way 
 def find_transitive_calls(node):
     # adjacent matrix
     N = len(MAP.keys())
-    adj_matrix = [[0 for row in MAP.keys()] for col in MAP.keys()]
+    adj_matrix = [[1 if row == col else 0 for row in MAP.keys()] for col in MAP.keys()] # init diag with 1s
     idx = {key: i for i, key in enumerate(MAP)}
+    reverse_idx = {v: k for k, v in idx.items()}
     for k,v in MAP.items(): # "sum0": Func(sum0,...)
         closure = find_direct_calls(v)
-        print(f"{k}: {closure}")
+        #print(f"{k}: {closure}")
         for j,v2 in MAP.items():
             if v2 in closure:
                 adj_matrix[idx.get(k)][idx.get(j)] = 1
 
-    print("Adjacent Matrix:")
-    for r in range(N):
-        print(adj_matrix[r])
-    
     # if there's 1 means i->k. So we need to find if k has any edges from k to any j
     # so if k->j ([k][j]=1), then i->j ([i][j] = 1)
     for k in range(N):
@@ -272,11 +267,17 @@ def find_transitive_calls(node):
                 for col in range(N):
                     if adj_matrix[k][col] == 1:
                         adj_matrix[row][col] = 1
-
+    
     # we have the first adjacent matrix
     print("\nResult Matrix with Transitive Calls:")
     for r in range(N):
         print(adj_matrix[r])
+
+    reach = MAP.copy()
+    for k in range(N):
+        if adj_matrix[idx.get(node.name)][k] == 0: # NOT N-1. m[N-1][k], needs to be the idx of the node passed as arg (m[idx.get(node.name)][k])
+            reach.pop(reverse_idx[k])
+    return reach
 
 
 """
