@@ -62,22 +62,31 @@ from ops import find_direct_calls, find_transitive_calls, MAP
 
 #find_transitive_calls(out.func)
 
-a = Tensor.input((3, 4), name="a")
-b = Tensor.input((3, 4), name="b")
-c = a + b            # both inputs
-d = c.relu()         # reads c
-e = c.sum(axis=1)    # ALSO reads c → diamond, plus a reduction
-f = d - e            # broadcast: (3,4) - (3,)  → the output
-g = a.relu()         # dead branch: never reaches f
+print("\n --- MLP --- ")
+x  = Tensor.input((8, 16), name="x")     # batch 8, features 16
+w1 = Tensor.input((16, 32), name="w1")
+b1 = Tensor.input((8,), name="b1")
+w2 = Tensor.input((32, 10), name="w2")
+h  = (x @ w1)                            # (8,32)  matmul
+h  = (h + b1)                            # broadcast add — careful, see note
+h  = h.relu()
+o  = (h @ w2)                            # (8,10)  second matmul
+p  = o.softmax()                         # 5 more Funcs
+junk = x.relu()                          # dead
+junk2 = (junk @ w1).sum(axis=1)          # dead, deeper — two-level dead branch
 
 print("\nMAP")
 for k,v in MAP.items():
     print(f'** {k}: {v}')
 
 print("\nCALLS")
-direct = find_direct_calls(g.func)
+direct = find_direct_calls(p.func)
 for c in direct:
     print("* ", c)
 
 print("\nTRANSITIVE")
-find_transitive_calls(g.func)
+rev = find_transitive_calls(p.func)
+
+print("\nCLEAN MAP")
+for k,v in rev.items():
+    print(f'** {k}:{v}')
