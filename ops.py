@@ -2,18 +2,22 @@ from ir import Expr, Call, Variable, Input, Add, Sub, Mul, Div, Max, ConstInt, C
 
 # given a function name, what is its actual Func definition: ("name": Func(...))
 MAP = {}
-
-# TODO: change op func names. Its getting huge. Maybe get a counter so add0, add1. 
+ 
 def op_add(op0, op1): # a,b are Tensors
-    # implicit apply broadcast if needed
+    # TODO: implicit broadcast
     vars = [Var(f'i{n}') for n in range(len(op0.shape))]
     args = [Variable(n.name) for n in vars]
+    if op0.shape == op1.shape:
+        bargs = args
+    elif len(op1.shape) < len(op0.shape):
+        if op1.shape == op0.shape[:len(op1.shape)]: bargs = args[:len(op1.shape)]
+        else: raise ValueError(f"unsupported shapes {op0.shape} {op1.shape}")
+    else:
+        raise ValueError(f"unsupported shapes {op0.shape} {op1.shape}") 
     a = Call(name=op0.func.name, args=args, ref=op0.func, call_type=callto(op0.func))
-    b = Call(name=op1.func.name, args=args, ref=op1.func, call_type=callto(op1.func))
-    operation = Add(a, b)
+    b = Call(name=op1.func.name, args=bargs, ref=op1.func, call_type=callto(op1.func))
     name = countname("add")
-    #func = Func(name=f'add_{op0.func.name}_{op1.func.name}', args=vars, value=operation, updates=[])
-    func = Func(name=name, args=vars, value=operation, updates=[])
+    func = Func(name=name, args=vars, value=Add(a,b), updates=[])
     MAP[func.name] = func
     return (func, op0.shape)
 
@@ -22,21 +26,16 @@ def op_sub(op0, op1):
     outshape = max(len(op0.shape), len(op1.shape))
     vars = [Var(f'i{n}') for n in range(outshape)]
     args = [Variable(n.name) for n in vars]
-    call0 = callto(op0.func)
-    call1 = callto(op1.func)
     if op0.shape == op1.shape:
         bargs = args
     elif len(op1.shape) < len(op0.shape):
         # op1=1D, op0=2D
-        if op1.shape == op0.shape[:len(op1.shape)]:
-            bargs = args[:len(op1.shape)]   # only first N vars
-        else:
-            raise ValueError(f"unsupported shapes {op0.shape} {op1.shape}")
+        if op1.shape == op0.shape[:len(op1.shape)]: bargs = args[:len(op1.shape)]   # only first N vars
+        else: raise ValueError(f"unsupported shapes {op0.shape} {op1.shape}")
     else:
         raise ValueError(f"unsupported shapes {op0.shape} {op1.shape}")
-    a = Call(name=op0.func.name, args=args, ref=op0.func, call_type=call0)
-    b = Call(name=op1.func.name, args=bargs, ref=op1.func, call_type=call1)
-    #func = Func(name=f'sub_{op0.func.name}_{op1.func.name}', args=vars, value=Sub(a, b), updates=[])
+    a = Call(name=op0.func.name, args=args, ref=op0.func, call_type=callto(op0.func))
+    b = Call(name=op1.func.name, args=bargs, ref=op1.func, call_type=callto(op1.func))
     name = countname("sub")
     func = Func(name=name, args=vars, value=Sub(a, b), updates=[])
     MAP[func.name] = func
@@ -61,15 +60,12 @@ def op_div(op0, op1):
     if op0.shape == op1.shape:
         bargs = args
     elif len(op1.shape) < len(op0.shape):
-        if op1.shape == op0.shape[:len(op1.shape)]:
-            bargs = args[:len(op1.shape)]
-        else:
-            raise ValueError(f'unsuported shapes {op0.shape} {op1.shape}')
+        if op1.shape == op0.shape[:len(op1.shape)]: bargs = args[:len(op1.shape)]
+        else: raise ValueError(f'unsuported shapes {op0.shape} {op1.shape}')
     else:
         raise ValueError(f'unsuported shapes {op0.shape} {op1.shape}')
     a = Call(name=op0.func.name, args=args, ref=op0.func, call_type=callto(op0.func))
     b = Call(name=op1.func.name, args=bargs, ref=op1.func, call_type=callto(op1.func))
-    #func = Func(name=f'div_{op0.func.name}_{op1.func.name}', args=vars, value=Div(a, b), updates=[])
     name = countname("div")
     func = Func(name=name, args=vars, value=Div(a, b), updates=[])
     MAP[func.name] = func
