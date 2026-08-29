@@ -218,7 +218,7 @@ def walk(node):
     return out
 
 # need to fix many things! Add explicit stack? No need. the language runtime pushes new stack frame each func call 
-def dfs(node, table, topo=None, onstack=None, done=None): 
+def dfs(node, table, topo=None, onstack=None, done=None):
     assert node.name in table, f'call to undefined func {node.name}'
     if node.name in done:
         return
@@ -229,7 +229,7 @@ def dfs(node, table, topo=None, onstack=None, done=None):
     for v in call:
         if v.name == node.name:
             continue
-        dfs(v, map, topo, done)
+        dfs(v, table, topo, onstack, done)
     onstack.remove(node.name)
     done.add(node.name)
     topo.append(node.name)
@@ -265,7 +265,7 @@ def find_direct_calls(node):
 def find_transitive_calls(node):
     # adjacent matrix
     N = len(TABLE.keys())
-    adj_matrix = [[1 if row == col else 0 for row in TABLE.keys()] for col in MAP.keys()] # init diag with 1s
+    adj_matrix = [[1 if row == col else 0 for row in TABLE.keys()] for col in TABLE.keys()] # init diag with 1s
     idx = {key: i for i, key in enumerate(TABLE)}
     reverse_idx = {v: k for k, v in idx.items()}
     for k,v in TABLE.items(): # "sum0": Func(sum0,...)

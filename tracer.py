@@ -73,8 +73,8 @@ h  = h.relu()
 o  = (h @ w2)                            # (8,10)  second matmul
 p  = o.softmax()                         # 5 more Funcs
 
-print("\nMAP")
-for k,v in MAP.items():
+print("\nTABLE")
+for k,v in TABLE.items():
     print(f'** {k}: {v}')
 
 print("\nCALLS")
