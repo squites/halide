@@ -1,7 +1,7 @@
 from ir import Expr, Call, Variable, Input, Add, Sub, Mul, Div, Max, ConstInt, ConstFloat, Func, Var, RDom, CallType
 
 # given a function name, what is its actual Func definition: ("name": Func(...))
-MAP = {}
+TABLE = {}
  
 def op_add(op0, op1): # op0,op1 are Tensors
     vars = [Var(f'i{n}') for n in range(len(op0.shape))]
@@ -17,7 +17,7 @@ def op_add(op0, op1): # op0,op1 are Tensors
     b = Call(name=op1.func.name, args=bargs, ref=op1.func, call_type=callto(op1.func))
     name = countname("add")
     func = Func(name=name, args=vars, value=Add(a,b), updates=[])
-    MAP[func.name] = func
+    TABLE[func.name] = func
     return (func, op0.shape)
 
 def op_sub(op0, op1):
@@ -37,7 +37,7 @@ def op_sub(op0, op1):
     b = Call(name=op1.func.name, args=bargs, ref=op1.func, call_type=callto(op1.func))
     name = countname("sub")
     func = Func(name=name, args=vars, value=Sub(a, b), updates=[])
-    MAP[func.name] = func
+    TABLE[func.name] = func
     return (func, op0.shape)
 
 def op_mul(op0, op1):
@@ -48,7 +48,7 @@ def op_mul(op0, op1):
     #func = Func(name=f'mul_{op0.func.name}{op1.func.name}', args=[i], value=operation, updates=[])
     name = countname("mul")
     func = Func(name=name, args=[i], value=operation, updates=[])
-    MAP[func.name] = func
+    TABLE[func.name] = func
     return (func, op0.shape)
 
 def op_div(op0, op1):
@@ -65,7 +65,7 @@ def op_div(op0, op1):
     b = Call(name=op1.func.name, args=bargs, ref=op1.func, call_type=callto(op1.func))
     name = countname("div")
     func = Func(name=name, args=vars, value=Div(a, b), updates=[])
-    MAP[func.name] = func
+    TABLE[func.name] = func
     return (func, op0.shape)
 
 def op_matmul(M, N): # Tensor(Input("name=in0", shape=(3,2), dtype=int32))
@@ -85,7 +85,7 @@ def op_matmul(M, N): # Tensor(Input("name=in0", shape=(3,2), dtype=int32))
     self_call = Call(name=f.name, args=[Variable("i"), Variable("j")], ref=f, call_type=CallType.FUNC) # acc
     update = ([Variable("i"), Variable("j")], Add(self_call, Mul(m0, n0)), k)
     f.updates.append(update)
-    MAP[f.name] = f
+    TABLE[f.name] = f
     return (f, (M.shape[0], N.shape[1]))
 
 def op_relu(t0):
@@ -96,7 +96,7 @@ def op_relu(t0):
     #f = Func(name=f'relu_{t0.func.name}', args=vars, value=Max(ConstInt(0), x), updates=[])
     name = countname("relu")
     f = Func(name=name, args=vars, value=Max(ConstInt(0), x), updates=[])
-    MAP[f.name] = f
+    TABLE[f.name] = f
     return (f, t0.shape)
 
 def op_exp(t0):
@@ -108,7 +108,7 @@ def op_exp(t0):
     #f = Func(name=f'exp_{t0.func.name}', args=vars, value=ext, updates=[])
     name = countname("exp")
     f = Func(name=name, args=vars, value=ext, updates=[])
-    MAP[f.name] = f
+    TABLE[f.name] = f
     return (f, t0.shape)
 
 def op_sum(t0, axis=0):
@@ -138,7 +138,7 @@ def op_sum(t0, axis=0):
     rule = (args[:-1], Add(acc, x), reduce) # args[:-1] to remove reduce variable
     f.updates.append(rule)
     shape = tuple(t0.shape[n] for n in outdims)
-    MAP[f.name] = f
+    TABLE[f.name] = f
     return (f, shape)
 
 def op_maxreduce(t0, axis=0): # axis tells which dim it wants to reduce. (2,4) axis=1, then reduce dim with 4, so softmax on each row independently
@@ -167,7 +167,7 @@ def op_maxreduce(t0, axis=0): # axis tells which dim it wants to reduce. (2,4) a
     update = (args2, Max(self_call, x), reduce)
     f.updates.append(update)
     shape = tuple(t0.shape[n] for n in kept)
-    MAP[f.name] = f
+    TABLE[f.name] = f
     """
     return:
     Func(
@@ -240,7 +240,6 @@ def calldfs(out, table):
     dfs(out, table, topo, onstack, done)
     return topo
 
-
 # inside Func node, which other Funcs this node calls to directly?
 # returns list of Func objs that the calls refer to
 def find_direct_calls(node):
@@ -265,14 +264,14 @@ def find_direct_calls(node):
 # Should be a simple DFS on output node, but I did this way because was my intuitive graph knowledge way 
 def find_transitive_calls(node):
     # adjacent matrix
-    N = len(MAP.keys())
-    adj_matrix = [[1 if row == col else 0 for row in MAP.keys()] for col in MAP.keys()] # init diag with 1s
-    idx = {key: i for i, key in enumerate(MAP)}
+    N = len(TABLE.keys())
+    adj_matrix = [[1 if row == col else 0 for row in TABLE.keys()] for col in MAP.keys()] # init diag with 1s
+    idx = {key: i for i, key in enumerate(TABLE)}
     reverse_idx = {v: k for k, v in idx.items()}
-    for k,v in MAP.items(): # "sum0": Func(sum0,...)
+    for k,v in TABLE.items(): # "sum0": Func(sum0,...)
         closure = find_direct_calls(v)
         #print(f"{k}: {closure}")
-        for j,v2 in MAP.items():
+        for j,v2 in TABLE.items():
             if v2 in closure:
                 adj_matrix[idx.get(k)][idx.get(j)] = 1
 
@@ -290,7 +289,7 @@ def find_transitive_calls(node):
     for r in range(N):
         print(adj_matrix[r])
 
-    reach = MAP.copy()
+    reach = TABLE.copy()
     for k in range(N):
         if adj_matrix[idx.get(node.name)][k] == 0: # NOT N-1. m[N-1][k], needs to be the idx of the node passed as arg (m[idx.get(node.name)][k])
             reach.pop(reverse_idx[k])

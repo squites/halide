@@ -1,5 +1,5 @@
 from tensor import Tensor
-from ops import find_direct_calls, find_transitive_calls, toposort, dfs, MAP
+from ops import find_direct_calls, find_transitive_calls, calldfs, TABLE
 
 # tracer file will be to load an example or a model from extern places
 # move to examples
@@ -92,5 +92,5 @@ for k,v in rev.items():
 
 print("\nTOPOSORT")
 #toposort(p.func, rev)
-x = dfs(p.func, rev)
+x = calldfs(p.func, rev)
 print(x)
