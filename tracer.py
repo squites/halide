@@ -1,5 +1,5 @@
 from tensor import Tensor
-from ops import find_direct_calls, find_transitive_calls, MAP
+from ops import find_direct_calls, find_transitive_calls, toposort, dfs, MAP
 
 # tracer file will be to load an example or a model from extern places
 # move to examples
@@ -72,8 +72,6 @@ h  = (h + b1)                            # broadcast add — careful, see note
 h  = h.relu()
 o  = (h @ w2)                            # (8,10)  second matmul
 p  = o.softmax()                         # 5 more Funcs
-junk = x.relu()                          # dead
-junk2 = (junk @ w1).sum(axis=1)          # dead, deeper — two-level dead branch
 
 print("\nMAP")
 for k,v in MAP.items():
@@ -88,5 +86,11 @@ print("\nTRANSITIVE")
 rev = find_transitive_calls(p.func)
 
 print("\nCLEAN MAP")
+print("NODE: ", p.func.name)
 for k,v in rev.items():
     print(f'** {k}:{v}')
+
+print("\nTOPOSORT")
+#toposort(p.func, rev)
+x = dfs(p.func, rev)
+print(x)

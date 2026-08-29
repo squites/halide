@@ -3,8 +3,7 @@ from ir import Expr, Call, Variable, Input, Add, Sub, Mul, Div, Max, ConstInt, C
 # given a function name, what is its actual Func definition: ("name": Func(...))
 MAP = {}
  
-def op_add(op0, op1): # a,b are Tensors
-    # TODO: implicit broadcast
+def op_add(op0, op1): # op0,op1 are Tensors
     vars = [Var(f'i{n}') for n in range(len(op0.shape))]
     args = [Variable(n.name) for n in vars]
     if op0.shape == op1.shape:
@@ -53,10 +52,8 @@ def op_mul(op0, op1):
     return (func, op0.shape)
 
 def op_div(op0, op1):
-    # TODO: broadcast!
     vars = [Var(f'i{n}') for n in range(len(op0.shape))]
     args = [Variable(n.name) for n in vars]
-    #call = CallType.INPUT if isinstance(op0.func, Input) else CallType.FUNC
     if op0.shape == op1.shape:
         bargs = args
     elif len(op1.shape) < len(op0.shape):
@@ -220,7 +217,30 @@ def walk(node):
         out.extend(walk(child))
     return out
 
-# looking inside the Func node, which other Funcs this node calls to directly?
+def dfs(node, map, topo=None, visited=None): # change `map` name to something else
+    # IMPORANT: 
+    # `map`: lookup table produced by find_transitive_calls. We don't iterate on it, just check if 
+    # the callee is there. All Funcs needed from out must be in the table.
+    # 3 stages:
+    # 1. UNVISITED
+    # 2. ON STACK - we're inside this node. calles havent finished yet
+    # 3. DONE - fully processed and appended to result list
+    assert node.name in map, "call to undefined func"
+    print("\nNODE:", node.name)
+    if visited is None: visited = set()
+    if topo is None: topo = []
+
+    visited.add(node.name)
+    print("VISITED:", visited)
+    call = find_direct_calls(node)
+    for v in call:
+        print("loop ", v.name)
+        if v.name not in visited:
+            dfs(v, map, topo, visited)
+    topo.append(node.name)
+    return topo
+
+# inside Func node, which other Funcs this node calls to directly?
 # returns list of Func objs that the calls refer to
 def find_direct_calls(node):
     calls = []
