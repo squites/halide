@@ -217,28 +217,29 @@ def walk(node):
         out.extend(walk(child))
     return out
 
-def dfs(node, map, topo=None, visited=None): # change `map` name to something else
-    # IMPORANT: 
-    # `map`: lookup table produced by find_transitive_calls. We don't iterate on it, just check if 
-    # the callee is there. All Funcs needed from out must be in the table.
-    # 3 stages:
-    # 1. UNVISITED
-    # 2. ON STACK - we're inside this node. calles havent finished yet
-    # 3. DONE - fully processed and appended to result list
-    assert node.name in map, "call to undefined func"
-    print("\nNODE:", node.name)
-    if visited is None: visited = set()
-    if topo is None: topo = []
-
-    visited.add(node.name)
-    print("VISITED:", visited)
+# need to fix many things! Add explicit stack? No need. the language runtime pushes new stack frame each func call 
+def dfs(node, table, topo=None, onstack=None, done=None): 
+    assert node.name in table, f'call to undefined func {node.name}'
+    if node.name in done:
+        return
+    if node.name in onstack:
+        raise ValueError(f'cycle error')
+    onstack.add(node.name)
     call = find_direct_calls(node)
     for v in call:
-        print("loop ", v.name)
-        if v.name not in visited:
-            dfs(v, map, topo, visited)
+        if v.name == node.name:
+            continue
+        dfs(v, map, topo, done)
+    onstack.remove(node.name)
+    done.add(node.name)
     topo.append(node.name)
+
+# wrapper for dfs
+def calldfs(out, table):
+    topo, onstack, done = [], set(), set()
+    dfs(out, table, topo, onstack, done)
     return topo
+
 
 # inside Func node, which other Funcs this node calls to directly?
 # returns list of Func objs that the calls refer to
