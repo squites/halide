@@ -92,5 +92,9 @@ for k,v in rev.items():
 
 print("\nTOPOSORT")
 #toposort(p.func, rev)
-x = calldfs(p.func, rev)
-print(x)
+topo = calldfs(p.func, rev)
+print(topo)
+topo.reverse()
+print(topo)
+
+print(p)

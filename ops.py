@@ -1,4 +1,5 @@
 from ir import Expr, Call, Variable, Input, Add, Sub, Mul, Div, Max, ConstInt, ConstFloat, Func, Var, RDom, CallType
+from schedule import Schedule, ForType
 
 # given a function name, what is its actual Func definition: ("name": Func(...))
 TABLE = {}
@@ -16,7 +17,8 @@ def op_add(op0, op1): # op0,op1 are Tensors
     a = Call(name=op0.func.name, args=args, ref=op0.func, call_type=callto(op0.func))
     b = Call(name=op1.func.name, args=bargs, ref=op1.func, call_type=callto(op1.func))
     name = countname("add")
-    func = Func(name=name, args=vars, value=Add(a,b), updates=[])
+    dims = [(i.name, ForType.SERIAL) for i in vars]
+    func = Func(name=name, args=vars, value=Add(a,b), updates=[], schedules=Schedule(dims))
     TABLE[func.name] = func
     return (func, op0.shape)
 
@@ -36,7 +38,8 @@ def op_sub(op0, op1):
     a = Call(name=op0.func.name, args=args, ref=op0.func, call_type=callto(op0.func))
     b = Call(name=op1.func.name, args=bargs, ref=op1.func, call_type=callto(op1.func))
     name = countname("sub")
-    func = Func(name=name, args=vars, value=Sub(a, b), updates=[])
+    dims = [(i.name, ForType.SERIAL) for i in vars]
+    func = Func(name=name, args=vars, value=Sub(a, b), updates=[], schedules=Schedule(dims))
     TABLE[func.name] = func
     return (func, op0.shape)
 
@@ -47,7 +50,7 @@ def op_mul(op0, op1):
     operation = Mul(a, b) 
     #func = Func(name=f'mul_{op0.func.name}{op1.func.name}', args=[i], value=operation, updates=[])
     name = countname("mul")
-    func = Func(name=name, args=[i], value=operation, updates=[])
+    func = Func(name=name, args=[i], value=operation, updates=[], schedules=Schedule((i.name, ForType.SERIAL)))
     TABLE[func.name] = func
     return (func, op0.shape)
 
@@ -64,13 +67,15 @@ def op_div(op0, op1):
     a = Call(name=op0.func.name, args=args, ref=op0.func, call_type=callto(op0.func))
     b = Call(name=op1.func.name, args=bargs, ref=op1.func, call_type=callto(op1.func))
     name = countname("div")
-    func = Func(name=name, args=vars, value=Div(a, b), updates=[])
+    dims = [(i.name, ForType.SERIAL) for i in args]
+    func = Func(name=name, args=vars, value=Div(a, b), updates=[], schedules=Schedule(dims))
     TABLE[func.name] = func
     return (func, op0.shape)
 
 def op_matmul(M, N): # Tensor(Input("name=in0", shape=(3,2), dtype=int32))
     i = Var("i")
     j = Var("j")
+    vars = [Var(f'i{n}') for n in range(len(M.shape))]
     k = RDom(name="k", min=0, extent=M.shape[1]) # k loops over the inner dim "M.shape[1]"
     call0 = CallType.INPUT if isinstance(M.func, Input) else CallType.FUNC # use this instead of hardcode 
     call1 = CallType.INPUT if isinstance(N.func, Input) else CallType.FUNC
@@ -81,10 +86,14 @@ def op_matmul(M, N): # Tensor(Input("name=in0", shape=(3,2), dtype=int32))
     #f = Func(name=f'matmul_{M.func.name}_{N.func.name}', args=[i, j], value=ConstInt(0), updates=[])    
     #self_call = Call(name=f'matmul_{M.func.name}_{N.func.name}', args=[Variable("i"), Variable("j")], ref=f, call_type=CallType.FUNC) # acc
     name = countname("matmul")
-    f = Func(name=name, args=[i, j], value=ConstInt(0), updates=[])    
+    f = Func(name=name, args=[i, j], value=ConstInt(0), updates=[], schedules=[])    
     self_call = Call(name=f.name, args=[Variable("i"), Variable("j")], ref=f, call_type=CallType.FUNC) # acc
     update = ([Variable("i"), Variable("j")], Add(self_call, Mul(m0, n0)), k)
     f.updates.append(update)
+    # schedule dims
+    dims = [(i.name, ForType.SERIAL) for i in vars]
+    f.schedules = Schedule(dims)
+    print("FUNC:", f)
     TABLE[f.name] = f
     return (f, (M.shape[0], N.shape[1]))
 
@@ -95,7 +104,8 @@ def op_relu(t0):
     x = Call(name=t0.func.name, args=variables, ref=t0.func, call_type=call)
     #f = Func(name=f'relu_{t0.func.name}', args=vars, value=Max(ConstInt(0), x), updates=[])
     name = countname("relu")
-    f = Func(name=name, args=vars, value=Max(ConstInt(0), x), updates=[])
+    dims = [(i.name, ForType.SERIAL) for i in vars]
+    f = Func(name=name, args=vars, value=Max(ConstInt(0), x), updates=[], schedules=Schedule(dims))
     TABLE[f.name] = f
     return (f, t0.shape)
 
@@ -107,7 +117,8 @@ def op_exp(t0):
     ext = Call(name="expf", args=[x], ref=None, call_type=CallType.EXTERN)
     #f = Func(name=f'exp_{t0.func.name}', args=vars, value=ext, updates=[])
     name = countname("exp")
-    f = Func(name=name, args=vars, value=ext, updates=[])
+    dims = [(i.name, ForType.SERIAL) for i in vars]
+    f = Func(name=name, args=vars, value=ext, updates=[], schedules=Schedule(dims))
     TABLE[f.name] = f
     return (f, t0.shape)
 
@@ -133,10 +144,12 @@ def op_sum(t0, axis=0):
     # updates is temporarily empty
     #f = Func(name=f'sum_{t0.func.name}', args=vars, value=ConstInt(0), updates=[])
     name = countname("sum")
-    f = Func(name=name, args=vars, value=ConstInt(0), updates=[])
+    f = Func(name=name, args=vars, value=ConstInt(0), updates=[], schedules=[])
     acc = Call(name=f.name, args=args[:-1], ref=f, call_type=CallType.FUNC)
     rule = (args[:-1], Add(acc, x), reduce) # args[:-1] to remove reduce variable
     f.updates.append(rule)
+    dims = [(i.name, ForType.SERIAL) for i in vars]
+    f.schedules = Schedule(dims)
     shape = tuple(t0.shape[n] for n in outdims)
     TABLE[f.name] = f
     return (f, shape)
@@ -162,10 +175,12 @@ def op_maxreduce(t0, axis=0): # axis tells which dim it wants to reduce. (2,4) a
     # init func
     #f = Func(name=f'maxreduce_{t0.func.name}', args=vars, value=ConstFloat(float("-inf")), updates=[])
     name = countname("maxreduce")
-    f = Func(name=name, args=vars, value=ConstFloat(float("-inf")), updates=[])
+    f = Func(name=name, args=vars, value=ConstFloat(float("-inf")), updates=[], schedules=[])
     self_call = Call(name=f.name, args=args2, ref=f, call_type=CallType.FUNC)
     update = (args2, Max(self_call, x), reduce)
     f.updates.append(update)
+    dims = [(i.name, ForType.SERIAL) for i in vars]
+    f.schedules = Schedule(dims)
     shape = tuple(t0.shape[n] for n in kept)
     TABLE[f.name] = f
     """
