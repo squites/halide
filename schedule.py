@@ -1,14 +1,7 @@
 #from tracer import topo
-from enum import StrEnum, auto
+from ir import ForType
 from typing import Union, Optional
 
-class ForType(StrEnum):
-    SERIAL = "serial"
-    PARALLEL = "parallel" 
-    VECTORIZED = "vectorized"
-    UNROLLED = "unrolled"
-    GPU_BLOCK = "gpu-block"
-    GPU_THREAD = "gpu-thread"
 
 class Schedule:
     def __init__(
@@ -55,3 +48,19 @@ class LoopLevel(Schedule):
     #def root(cls):
     #    return cls()
     
+
+def schedule_functions():
+    pass
+
+def bounds_inference():
+    pass
+
+def storage_flattening():
+    pass
+
+"""
+Explanation of schedules:
+* compute_root(): means compute this func exactly once, over its entire needed domain, 
+                  store it in a buffer, before any consumer runs
+"""
+

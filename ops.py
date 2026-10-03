@@ -2,7 +2,7 @@ from ir import Expr, Call, Variable, Input, Add, Sub, Mul, Div, Max, ConstInt, C
 from schedule import Schedule, ForType
 
 # given a function name, what is its actual Func definition: ("name": Func(...))
-TABLE = {}
+ENV_TABLE = {}
  
 def op_add(op0, op1): # op0,op1 are Tensors
     vars = [Var(f'i{n}') for n in range(len(op0.shape))]
@@ -19,7 +19,7 @@ def op_add(op0, op1): # op0,op1 are Tensors
     name = countname("add")
     dims = [(i.name, ForType.SERIAL) for i in vars]
     func = Func(name=name, args=vars, value=Add(a,b), updates=[], schedules=Schedule(dims))
-    TABLE[func.name] = func
+    ENV_TABLE[func.name] = func
     return (func, op0.shape)
 
 def op_sub(op0, op1):
@@ -40,7 +40,7 @@ def op_sub(op0, op1):
     name = countname("sub")
     dims = [(i.name, ForType.SERIAL) for i in vars]
     func = Func(name=name, args=vars, value=Sub(a, b), updates=[], schedules=Schedule(dims))
-    TABLE[func.name] = func
+    ENV_TABLE[func.name] = func
     return (func, op0.shape)
 
 def op_mul(op0, op1):
@@ -51,7 +51,7 @@ def op_mul(op0, op1):
     #func = Func(name=f'mul_{op0.func.name}{op1.func.name}', args=[i], value=operation, updates=[])
     name = countname("mul")
     func = Func(name=name, args=[i], value=operation, updates=[], schedules=Schedule((i.name, ForType.SERIAL)))
-    TABLE[func.name] = func
+    ENV_TABLE[func.name] = func
     return (func, op0.shape)
 
 def op_div(op0, op1):
@@ -69,7 +69,7 @@ def op_div(op0, op1):
     name = countname("div")
     dims = [(i.name, ForType.SERIAL) for i in args]
     func = Func(name=name, args=vars, value=Div(a, b), updates=[], schedules=Schedule(dims))
-    TABLE[func.name] = func
+    ENV_TABLE[func.name] = func
     return (func, op0.shape)
 
 def op_matmul(M, N): # Tensor(Input("name=in0", shape=(3,2), dtype=int32))
@@ -94,7 +94,7 @@ def op_matmul(M, N): # Tensor(Input("name=in0", shape=(3,2), dtype=int32))
     dims = [(i.name, ForType.SERIAL) for i in vars]
     f.schedules = Schedule(dims)
     print("FUNC:", f)
-    TABLE[f.name] = f
+    ENV_TABLE[f.name] = f
     return (f, (M.shape[0], N.shape[1]))
 
 def op_relu(t0):
@@ -106,7 +106,7 @@ def op_relu(t0):
     name = countname("relu")
     dims = [(i.name, ForType.SERIAL) for i in vars]
     f = Func(name=name, args=vars, value=Max(ConstInt(0), x), updates=[], schedules=Schedule(dims))
-    TABLE[f.name] = f
+    ENV_TABLE[f.name] = f
     return (f, t0.shape)
 
 def op_exp(t0):
@@ -119,7 +119,7 @@ def op_exp(t0):
     name = countname("exp")
     dims = [(i.name, ForType.SERIAL) for i in vars]
     f = Func(name=name, args=vars, value=ext, updates=[], schedules=Schedule(dims))
-    TABLE[f.name] = f
+    ENV_TABLE[f.name] = f
     return (f, t0.shape)
 
 def op_sum(t0, axis=0):
@@ -151,7 +151,7 @@ def op_sum(t0, axis=0):
     dims = [(i.name, ForType.SERIAL) for i in vars]
     f.schedules = Schedule(dims)
     shape = tuple(t0.shape[n] for n in outdims)
-    TABLE[f.name] = f
+    ENV_TABLE[f.name] = f
     return (f, shape)
 
 def op_maxreduce(t0, axis=0): # axis tells which dim it wants to reduce. (2,4) axis=1, then reduce dim with 4, so softmax on each row independently
@@ -182,7 +182,7 @@ def op_maxreduce(t0, axis=0): # axis tells which dim it wants to reduce. (2,4) a
     dims = [(i.name, ForType.SERIAL) for i in vars]
     f.schedules = Schedule(dims)
     shape = tuple(t0.shape[n] for n in kept)
-    TABLE[f.name] = f
+    ENV_TABLE[f.name] = f
     """
     return:
     Func(
@@ -279,14 +279,14 @@ def find_direct_calls(node):
 # Should be a simple DFS on output node, but I did this way because was my intuitive graph knowledge way 
 def find_transitive_calls(node):
     # adjacent matrix
-    N = len(TABLE.keys())
-    adj_matrix = [[1 if row == col else 0 for row in TABLE.keys()] for col in TABLE.keys()] # init diag with 1s
-    idx = {key: i for i, key in enumerate(TABLE)}
+    N = len(ENV_TABLE.keys())
+    adj_matrix = [[1 if row == col else 0 for row in ENV_TABLE.keys()] for col in ENV_TABLE.keys()] # init diag with 1s
+    idx = {key: i for i, key in enumerate(ENV_TABLE)}
     reverse_idx = {v: k for k, v in idx.items()}
-    for k,v in TABLE.items(): # "sum0": Func(sum0,...)
+    for k,v in ENV_TABLE.items(): # "sum0": Func(sum0,...)
         closure = find_direct_calls(v)
         #print(f"{k}: {closure}")
-        for j,v2 in TABLE.items():
+        for j,v2 in ENV_TABLE.items():
             if v2 in closure:
                 adj_matrix[idx.get(k)][idx.get(j)] = 1
 
@@ -304,7 +304,7 @@ def find_transitive_calls(node):
     for r in range(N):
         print(adj_matrix[r])
 
-    reach = TABLE.copy()
+    reach = ENV_TABLE.copy()
     for k in range(N):
         if adj_matrix[idx.get(node.name)][k] == 0: # NOT N-1. m[N-1][k], needs to be the idx of the node passed as arg (m[idx.get(node.name)][k])
             reach.pop(reverse_idx[k])
