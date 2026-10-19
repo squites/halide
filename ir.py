@@ -16,7 +16,7 @@ class Call(Expr): # Call is "read one element of that thing (name), at these coo
     call_type: "CallType" # tag saying what kind of thing the "name" refers to.
 
     def __repr__(self) -> str:
-        return f'Call({self.name}, {self.args}, {self.call_type})'
+        return f'Call({self.name}, {self.args}, ref={self.ref.name}, {self.call_type})'
     
     def children(self):
         return self.args
@@ -127,6 +127,7 @@ class Func:
     # schedule record functions
     def compute_root(self):
         self.schedules.compute_lvl = "root"
+        self.schedules.store_lvl = "root"
 
     def inline(self):
         self.schedules.compute_lvl = "inline"
@@ -177,24 +178,51 @@ Realize():
  * the condition evaluates to true.
 """
 class Realize(Stmt):
-   def __init__(self, func: Func, bound: tuple):
+    def __init__(self, func: Func, bound: tuple, body: Stmt, dtype: DType):
        self.func = func
        self.bound = bound
+       self.body = body
+       self.dtype = dtype
+
+    def __repr__(self):
+        return f'Realize({self.func}, {self.bound}, {self.body}, {self.dtype})'
 
 class Produce(Stmt):
-    pass
+    def __init__(self, name, body):
+        self.name = name
+        self.body = body
 
+    def __repr__(self):
+        return f'Produce({self.name}, {self.body})'
+        
 class Consume(Stmt):
-    pass
+    def __init__(self, name, body):
+        self.name = name
+        self.body = body
+
+    def __repr__(self):
+        return f'Consume({self.name}, {self.body})'
+
+class Provide(Stmt):
+    def __init__(self, name, args, value):
+        self.name = name
+        self.args = args
+        self.value = value
+
+    def __repr__(self):
+        return f'Provide({self.name}, {self.args}, {self.value})'
 
 class For(Stmt):
-    def __init__(self, name: str, min: Expr, extent: Expr, fortype: ForType, device_api: Optional[str], body: Stmt):
+    def __init__(self, name: str, min: Expr, extent: Expr, fortype: ForType, body: Stmt):
         self.name = name
         self.min = min
         self.extent = extent
         self.fortype = fortype
-        self.device_api = device_api
+        #self.device_api = device_api
         self.body = body
+
+    def __repr__(self):
+        return f'For({self.name}, min={self.min}, extent={self.extent}, {self.fortype}, {self.body})'
 
 class Allocate(Stmt):
     pass

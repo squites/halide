@@ -6,7 +6,7 @@ from typing import Union, Optional
 class Schedule:
     def __init__(
         self, 
-        dims: list[tuple(str, ForType)], # change to (str, ForType)
+        dims: list[tuple(str, ForType)], 
         splits: Optional[list["Split"]] = [], 
         compute_lvl: Union["LoopLevel", str] = "inline", # can be LoopLevel(fname, varname), or INLINE or ROOT
         store_lvl: Union["LoopLevel", str] = "inline" # str for "inline", "root". Change this later instead of str
@@ -17,7 +17,8 @@ class Schedule:
         self.store_lvl = store_lvl
 
     def __repr__(self) -> str:
-        return f'Schedule({self.dims}, {self.splits}, compute={self.compute_lvl}, store={self.store_lvl})'
+        dims = [(var, f"ForType.{ftype.name}") for var, ftype in self.dims] # ForType is printing as string, change that
+        return f'Schedule({dims}, {self.splits}, compute={self.compute_lvl}, store={self.store_lvl})'
     
     # these should be inside Func() class?
     #def compute_at():
@@ -62,5 +63,12 @@ def storage_flattening():
 Explanation of schedules:
 * compute_root(): means compute this func exactly once, over its entire needed domain, 
                   store it in a buffer, before any consumer runs
+
+                  
+ForType: tells the compiler how the For loop should be executed.
+    - SERIAL: execute iterations one after another
+    - PARALLEL: execute independent iterations concurrently
+    - UNROLLED: replace loop with individual iterations one after another
+    ...                  
 """
 
